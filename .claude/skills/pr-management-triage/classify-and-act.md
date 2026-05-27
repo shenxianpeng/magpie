@@ -46,7 +46,7 @@ filter is skipped silently from the main triage flow.
 | F3 | Draft and not stale | `isDraft == true` and any activity within the last 14 days. Stale-sweep classifications in [`stale-sweeps.md`](stale-sweeps.md) may still pull the PR back in. |
 | F4 | Already marked ready, no regression | `labels` contains `ready for maintainer review` AND CI green AND `mergeable != CONFLICTING` AND no unresolved **collaborator** threads (same collaborator-author qualifier as rows 19/20 / [`unresolved_threads_only`](#unresolved_threads_only) — contributor-author threads alone don't count as a regression for an already-ready PR). **Regression bypasses this filter** — any of: CI red, new conflict, or a new unresolved collaborator thread whose triggering event (failing check `startedAt`, conflict detection, thread `createdAt`) is *after* the label-add timestamp. The typical case is a contributor pushing a rebase or fixup commit to a ready-for-review PR that re-introduces deterministic failures, OR a maintainer leaving a new review thread post-label-add. PRs bypassing F4 fall through to the decision table normally; the cross-cutting [`strip-ready-on-downgrade` hard rule](#hard-rules-cross-cutting-the-table) ensures the label comes off if a `deterministic_flag` row fires. |
 | F5a | Recent collaborator comment (author cooldown) | Most recent comment from the **union of** general-issue comments (`comments(last:10)`) and **review-thread comments** (`reviewThreads.nodes.comments`) is by a `COLLABORATOR`/`MEMBER`/`OWNER`, `createdAt < 72h` ago, AND posted after `commits(last:1).committedDate`. The review-thread leg is essential — a maintainer asking a clarifying question in-thread is just as much an active conversation as a top-level comment, and treating only the latter routes the PR to `ping` / `request-author-confirmation` while the maintainer is still mid-sentence. |
-| F5b | Maintainer-to-maintainer ping unanswered | Most recent collaborator comment from the **union** described in F5a above `@`-mentions one or more logins other than the PR author AND none of those mentioned logins have posted on the PR (general comments **or** review threads) or in `latestReviews` after that comment. Team mentions (e.g. `@<upstream>-committers`) are conservatively treated as F5b matches. |
+| F5b | Maintainer-to-maintainer ping unanswered | **Walk the most recent 5 collaborator comments** from the **union** described in F5a above (newest-first). For each, if it `@`-mentions one or more logins other than the PR author AND none of those mentioned logins have posted on the PR (general comments **or** review threads) or in `latestReviews` after that comment, F5b fires. The 5-comment window catches the case where maintainer A pings maintainer B, then a different maintainer C (often the viewer) posts a quality-criteria comment on the PR — the more-recent quality comment is not itself a ping, but the older A→B ping is still unanswered and the PR is still mid-conversation between maintainers. Without the deep scan F5b only inspects the most recent collaborator comment and the older ping slides past unfiltered. The 5-comment cap is the same one driving `comments(last:10)` / `reviewThreads.comments(first:5)` — bounded scan, no extra GraphQL. Team mentions (e.g. `@<upstream>-committers`) are conservatively treated as F5b matches. |
 | F6 | Maintainer co-drafted | `isDraft == true` AND any of: (a) `latestReviews` has a node with `authorAssociation ∈ {OWNER, MEMBER, COLLABORATOR}` AND `author.login ≠ <viewer>` AND `state ∈ {COMMENTED, CHANGES_REQUESTED, APPROVED}` AND `submittedAt > commits(last:1).committedDate` AND review body is non-empty (avoids the "review with only inline thread comments and an empty top-level body" false positive — those are already counted by row 14/15 unresolved-thread logic); (b) `comments(last:10)` has a node with `authorAssociation ∈ {OWNER, MEMBER, COLLABORATOR}` AND `author.login ≠ <viewer>` AND `length(bodyText) ≥ 80` AND `createdAt > commits(last:1).committedDate`. Trivial signals (emoji-only, `+1`, `lgtm`, pure `@team` pings without prose) do not count — those are already covered by F5a/F5b or are below the substantive-engagement threshold. **Stale-sweep classifications in [`stale-sweeps.md`](stale-sweeps.md) may still pull the PR back in** — F6 only suppresses duplicate-proposal rows from the decision table, not eventual-resurfacing on a different action. |
 
 F5a, F5b, and F6 override every signal in the decision table —
@@ -72,6 +72,7 @@ Action verbs are defined in [`actions.md`](actions.md).
 
 | #  | Precondition (all must hold)                                                                  | Classification             | Action                  | Reason template |
 |----|-----------------------------------------------------------------------------------------------|---------------------------|------------------------|-----------------|
+| 0  | [`first_time_stale_abandoned`](#first_time_stale_abandoned) — first-time contributor PR with a prior viewer triage marker and no commits since the marker, ≥ 30 days old | `first_time_stale_abandoned` | `skip` | First-time contributor's PR was triaged ≥ 30d ago, no push since — let the stale-sweep retire it rather than re-approving CI |
 | 1  | `head_sha` appears in the per-page `action_required` REST index, OR ([`first_time_no_real_ci`](#first_time_no_real_ci))     | `pending_workflow_approval` | `approve-workflow`     | First-time contributor — review the diff and approve CI, or flag suspicious |
 | 2  | [`copilot_review_stale`](#copilot_review_stale)                                               | `stale_copilot_review`     | `draft` (include the specific Copilot thread URL in the violation body) | Unaddressed Copilot review ≥ 7 days old — convert to draft |
 | 3  | Viewer comment containing the triage marker exists, posted after last commit, age < 7 days, sub-state `waiting` | `already_triaged`         | `skip`                 | Already triaged M days ago — still waiting on author |
@@ -85,6 +86,7 @@ Action verbs are defined in [`actions.md`](actions.md).
 | 10 | [`ci_failures_only`](#ci_failures_only) AND every failure ∈ `recent_main_failures`             | `deterministic_flag`       | `rerun`                | All N CI failures also appear in recent main-branch PRs — likely systemic, suggest rerun |
 | 11 | [`ci_failures_only`](#ci_failures_only) AND any failure ∈ `recent_main_failures`               | `deterministic_flag`       | `rerun`                | K/N CI failures match recent main-branch PRs — likely systemic |
 | 12 | [`ci_failures_only`](#ci_failures_only) AND every failed check is a [static check](#static_check) | `deterministic_flag`     | `comment`              | Only static-check failures — needs a code fix, not a rerun |
+| 12b | [`ci_failures_only`](#ci_failures_only) AND **any** failed check is a [static check](#static_check) (and not all — row 12 captured that case) | `deterministic_flag`     | `comment`              | Mixed failures including a static-check failure — code fix needed; a rerun would re-fail on the static check |
 | 13 | [`ci_failures_only`](#ci_failures_only) AND `failed_count <= 2` AND `commits_behind <= 50`     | `deterministic_flag`       | `rerun`                | N CI failure(s) on otherwise clean PR — likely flaky, suggest rerun |
 | 14a | [`author_confirmation_received`](#author_confirmation_received)                                | `author_confirmed_ready`   | `mark-ready`           | Author confirmed PR is ready for maintainer review — apply label |
 | 14b | [`pending_author_confirmation`](#pending_author_confirmation)                                  | `awaiting_author_confirmation` | `skip`             | Awaiting author confirmation requested M days ago |
@@ -379,12 +381,22 @@ with the reply visible.
 ### `copilot_review_stale`
 
 The PR has at least one unresolved review thread whose first
-comment author matches a Copilot bot login (case-insensitive:
-`copilot-pull-request-reviewer[bot]`, `copilot[bot]`,
-`github-copilot[bot]`, or any login matching `copilot*[bot]` /
-`github-copilot*[bot]`) AND that comment's `createdAt` is ≥ 7
-days ago AND no author reply in the same thread or on the PR
-after that timestamp.
+comment author matches a Copilot bot login (case-insensitive
+substring match on the login). The skill matches any of:
+`copilot-pull-request-reviewer`, `copilot`, `github-copilot`,
+or any login containing the substring `copilot` followed
+optionally by `[bot]`. The `[bot]` suffix is matched when
+present but NOT required — GitHub's GraphQL `Actor.login`
+returns the bot username without the `[bot]` suffix for some
+Copilot integrations (e.g. `copilot-pull-request-reviewer`),
+even though the same bot appears as `copilot-pull-request-reviewer[bot]`
+on the REST API. Requiring `[bot]` excludes real Copilot
+threads from this rule and lets them age past the 7-day
+threshold without triggering. The threshold itself is unchanged.
+
+The thread must also satisfy: that comment's `createdAt` is
+≥ 7 days ago AND no author reply in the same thread or on the
+PR after that timestamp.
 
 ### `static_check`
 
@@ -418,6 +430,40 @@ sampled PRs is "systemic".
 Count of PRs by the same author seen on the **current page** that
 already matched a `deterministic_flag` row. Per-page only — does
 not persist across sessions.
+
+### `first_time_stale_abandoned`
+
+All of:
+
+- `authorAssociation == FIRST_TIME_CONTRIBUTOR` or
+  `FIRST_TIMER`.
+- A viewer triage marker exists in `comments(last:10)` (i.e.
+  a comment by the viewer containing the literal string
+  `Pull Request quality criteria`).
+- The PR's `commits(last:1).committedDate` is **at or before**
+  the triage marker's `createdAt` — author has not pushed
+  since the maintainer's feedback.
+- `<now> - committedDate >= 30 days`.
+
+Order matters: this precondition is evaluated by **row 0**,
+which fires *before* row 1 (`pending_workflow_approval`).
+Without it, an abandoned first-time PR that has sat for months
+since being triaged keeps surfacing in the
+`approve-workflow` group every sweep, where the maintainer
+either re-approves CI on dead code or has to skip it manually.
+
+A row-0 hit routes to `skip` — the [stale-sweep
+flow](stale-sweeps.md) is the right place to retire the PR
+(via sweep 1b's "untriaged draft >= 14 days" trigger, since
+the row-0 marker test does *not* set the draft state). The
+classifier's job here is just to keep the PR out of the
+workflow-approval group.
+
+The 30-day threshold is intentionally longer than the
+[grace periods](#grace-periods) (24h / 96h) and the F5a
+cooldown (72h). It captures *abandonment*, not slow response —
+a contributor who replies within a week and then stalls for
+another week is not abandoned, just busy.
 
 ### `first_time_no_real_ci`
 
