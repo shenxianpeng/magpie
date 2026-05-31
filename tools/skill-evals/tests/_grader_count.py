@@ -14,6 +14,7 @@ Tests set ``GRADER_COUNTER_FILE`` to a temp path, then assert that exactly one
 batched grader call was made per case regardless of how many prose-field
 mismatches it contained.
 """
+
 from __future__ import annotations
 
 import json

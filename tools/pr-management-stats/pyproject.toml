@@ -26,11 +26,6 @@ license = { text = "Apache-2.0" }
 # an installable package. This pyproject exists only to pin the test harness.
 dependencies = []
 
-[dependency-groups]
-dev = [
-  "pytest>=8.0",
-]
-
 [tool.pytest.ini_options]
 minversion = "8.0"
 addopts = "-ra -q"

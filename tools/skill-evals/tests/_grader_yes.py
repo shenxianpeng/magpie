@@ -14,6 +14,7 @@ Used by tests as a stand-in for ``claude -p --model haiku``. Reads the runner's
 batched rubric prompt on stdin, extracts every ``Field: <path>`` line, and
 emits a one-line JSON object mapping each path to ``{"match": true, ...}``.
 """
+
 from __future__ import annotations
 
 import json

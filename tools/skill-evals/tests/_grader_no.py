@@ -12,6 +12,7 @@
 
 Companion to ``_grader_yes.py`` for testing the runner's batched-grader path.
 """
+
 from __future__ import annotations
 
 import json

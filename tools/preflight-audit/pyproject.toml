@@ -31,13 +31,6 @@ dependencies = []
 [project.scripts]
 preflight-audit = "preflight_audit:main"
 
-[dependency-groups]
-dev = [
-  "mypy>=2.1.0",
-  "pytest>=8.0",
-  "ruff>=0.15.14",
-]
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/preflight_audit"]
 

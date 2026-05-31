@@ -495,12 +495,10 @@ def collect_diffs(
     if isinstance(expected, list):
         actual_list = actual  # type: ignore[assignment]
         if len(actual_list) != len(expected):
-            return [
-                f"{path}: length mismatch (actual={len(actual_list)}, expected={len(expected)})"
-            ], []
+            return [f"{path}: length mismatch (actual={len(actual_list)}, expected={len(expected)})"], []
         decision_msgs = []
         prose_pairs = []
-        for i, (a_item, e_item) in enumerate(zip(actual_list, expected)):
+        for i, (a_item, e_item) in enumerate(zip(actual_list, expected, strict=False)):
             sub_d, sub_p = collect_diffs(
                 a_item,
                 e_item,
@@ -547,16 +545,10 @@ def batch_grade_prose_fields(
     except OSError as exc:
         return {p: (False, f"grader CLI invocation failed ({exc})") for p, _, _ in pairs}
     if rc != 0:
-        return {
-            p: (False, f"grader CLI exited {rc} ({stderr.strip()[:200]})")
-            for p, _, _ in pairs
-        }
+        return {p: (False, f"grader CLI exited {rc} ({stderr.strip()[:200]})") for p, _, _ in pairs}
     verdict, err = extract_json_from_output(stdout)
     if err is not None or not isinstance(verdict, dict):
-        return {
-            p: (False, f"grader returned unusable output ({err or 'not a dict'})")
-            for p, _, _ in pairs
-        }
+        return {p: (False, f"grader returned unusable output ({err or 'not a dict'})") for p, _, _ in pairs}
     result: dict[str, tuple[bool, str]] = {}
     for path, _, _ in pairs:
         entry = verdict.get(path)
@@ -590,9 +582,7 @@ def compare_with_grader(
     Returns ``(ok, messages)``; ``messages`` is empty when ok and otherwise
     lists one note per failing field.
     """
-    decision_msgs, prose_pairs = collect_diffs(
-        actual, expected, prose_fields=prose_fields
-    )
+    decision_msgs, prose_pairs = collect_diffs(actual, expected, prose_fields=prose_fields)
     if decision_msgs:
         # Case already fails on a decision field; no need to call the grader.
         return False, decision_msgs
@@ -602,9 +592,7 @@ def compare_with_grader(
     ok = True
     msgs: list[str] = []
     for path, _, _ in prose_pairs:
-        match, note = grades.get(
-            path, (False, f"{path}: no verdict returned by grader")
-        )
+        match, note = grades.get(path, (False, f"{path}: no verdict returned by grader"))
         if not match:
             ok = False
             # `note` from batch_grade_prose_fields is already field-attributed
@@ -771,10 +759,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--fail-fast",
         action="store_true",
-        help=(
-            "Stops on the first failure instead of running all cases."
-            " Only applies in --cli mode; "
-        ),
+        help=("Stops on the first failure instead of running all cases. Only applies in --cli mode; "),
     )
     parser.add_argument(
         "--tag",
@@ -891,9 +876,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if rc != 0:
             if args.exact:
-                print(
-                    f"ERROR   {case_label} (CLI exited {rc}; stderr: {stderr.strip()[:200]})"
-                )
+                print(f"ERROR   {case_label} (CLI exited {rc}; stderr: {stderr.strip()[:200]})")
                 errored += 1
                 if args.verbose:
                     print("--- STDOUT ---")

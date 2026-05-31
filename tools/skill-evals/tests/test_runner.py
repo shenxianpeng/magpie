@@ -62,6 +62,7 @@ def _count_grader_calls(counter_path: Path) -> int:
         return 0
     return sum(1 for _ in counter_path.read_text().splitlines() if _)
 
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -752,6 +753,7 @@ def test_cli_mode_fail_with_wrong_json(tmp_path: Path, capsys: pytest.CaptureFix
     assert "FAIL" in stdout
     assert "1 failed" in stdout
 
+
 def test_cli_mode_fail_with_wrong_jsons(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     """A CLI that returns the wrong JSONS should FAIL with multiple failures and exit non-zero."""
     fixtures_dir, _ = _make_cli_case(tmp_path, expected={"verdict": "ok"})
@@ -762,7 +764,10 @@ def test_cli_mode_fail_with_wrong_jsons(tmp_path: Path, capsys: pytest.CaptureFi
     )
     assert rc == 1
     assert "FAIL" in stdout
-    assert "2 failed" in stdout # asserts that behaviour doesn't changes and outputs exactly 2 failures instead of stopping at the first one, which is tested in the next test case
+    assert (
+        "2 failed" in stdout
+    )  # asserts that behaviour doesn't changes and outputs exactly 2 failures instead of stopping at the first one, which is tested in the next test case
+
 
 def test_cli_model_with_fail_fast_and_wrong_json(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     """With --fail-fast, the runner should stop at the first failure and not run further cases."""
@@ -778,6 +783,7 @@ def test_cli_model_with_fail_fast_and_wrong_json(tmp_path: Path, capsys: pytest.
     assert "1 failed" in stdout
     assert "CASE: case-2" not in stdout  # second case should not run at all
 
+
 def test_cli_model_with_fail_fast_and_error_json(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     """In timeout being negative raise internal error when run_cli is called and --fail-fast is used."""
     fixtures_dir, _ = _make_cli_case(tmp_path, expected={"verdict": "wrong"})
@@ -787,7 +793,8 @@ def test_cli_model_with_fail_fast_and_error_json(tmp_path: Path, capsys: pytest.
         [
             "--cli",
             'echo \'{"verdict": "wrong"}\'',
-            '--timeout',"-1",  # force an error (timeout) instead of a fail, to check that fail-fast also applies to errors
+            "--timeout",
+            "-1",  # force an error (timeout) instead of a fail, to check that fail-fast also applies to errors
             "--exact",
             "--fail-fast",
             str(fixtures_dir),
@@ -797,6 +804,7 @@ def test_cli_model_with_fail_fast_and_error_json(tmp_path: Path, capsys: pytest.
     assert "ERROR" in stdout
     assert "1 errored" in stdout
     assert "CASE: case-2" not in stdout  # second case should not run at all
+
 
 def test_cli_mode_manual_skips_structural(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     """Structural expected.json (has_* / mention_*) is reported MANUAL, not auto-compared."""
@@ -830,7 +838,9 @@ def test_cli_mode_non_json_under_exact_errors(tmp_path: Path, capsys: pytest.Cap
     assert "1 errored" in stdout
 
 
-def test_cli_mode_non_json_wraps_and_passes_under_field_aware(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+def test_cli_mode_non_json_wraps_and_passes_under_field_aware(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
     """Default field-aware mode wraps prose as {"raw_output": ...} so the
     intersection-only comparator can proceed. With expected.json declaring
     no raw_output key, the case passes."""
@@ -854,9 +864,7 @@ def test_cli_mode_non_json_wrap_can_assert_on_raw_output(tmp_path: Path, capsys:
     """Suite authors who want to gate on the prose can declare raw_output
     in expected.json; the wrapped actual carries the model's prose and a
     mismatch is a real decision-level failure."""
-    fixtures_dir, _ = _make_cli_case(
-        tmp_path, expected={"raw_output": "this exact prose\n"}
-    )
+    fixtures_dir, _ = _make_cli_case(tmp_path, expected={"raw_output": "this exact prose\n"})
     rc, stdout, _ = _run_main(
         capsys,
         [
@@ -1031,24 +1039,20 @@ def test_load_grading_schema_missing_key_falls_back_to_default(tmp_path: Path):
 
 def test_grade_prose_field_short_circuits_on_exact_equality():
     # Identical values should pass without invoking any CLI.
-    ok, note = grade_prose_field(
-        "$.reason", "boom", "boom", grader_cli="false", timeout=5
-    )
+    ok, note = grade_prose_field("$.reason", "boom", "boom", grader_cli="false", timeout=5)
     assert ok is True
     assert note == ""
 
 
 def test_grade_prose_field_grader_says_match():
-    grader = "echo '{\"match\": true, \"reason\": \"same meaning\"}'"
-    ok, note = grade_prose_field(
-        "$.reason", "the build failed", "build broke", grader_cli=grader, timeout=5
-    )
+    grader = 'echo \'{"match": true, "reason": "same meaning"}\''
+    ok, note = grade_prose_field("$.reason", "the build failed", "build broke", grader_cli=grader, timeout=5)
     assert ok is True
     assert note == ""
 
 
 def test_grade_prose_field_grader_says_no():
-    grader = "echo '{\"match\": false, \"reason\": \"different conclusion\"}'"
+    grader = 'echo \'{"match": false, "reason": "different conclusion"}\''
     ok, note = grade_prose_field(
         "$.reason", "the build failed", "the build passed", grader_cli=grader, timeout=5
     )
@@ -1058,17 +1062,13 @@ def test_grade_prose_field_grader_says_no():
 
 
 def test_grade_prose_field_grader_returns_garbage():
-    ok, note = grade_prose_field(
-        "$.reason", "x", "y", grader_cli="echo 'not json at all'", timeout=5
-    )
+    ok, note = grade_prose_field("$.reason", "x", "y", grader_cli="echo 'not json at all'", timeout=5)
     assert ok is False
     assert "$.reason" in note
 
 
 def test_grade_prose_field_grader_non_zero_exit():
-    ok, note = grade_prose_field(
-        "$.reason", "x", "y", grader_cli="false", timeout=5
-    )
+    ok, note = grade_prose_field("$.reason", "x", "y", grader_cli="false", timeout=5)
     assert ok is False
     assert "$.reason" in note
 
@@ -1085,9 +1085,7 @@ def test_collect_diffs_no_diff_when_equal():
 
 
 def test_collect_diffs_decision_scalar_mismatch_is_decision_only():
-    d, p = collect_diffs(
-        {"verdict": "X"}, {"verdict": "Y"}, prose_fields={"reason"}
-    )
+    d, p = collect_diffs({"verdict": "X"}, {"verdict": "Y"}, prose_fields={"reason"})
     assert any("verdict" in m for m in d)
     assert p == []
 
@@ -1125,18 +1123,14 @@ def test_collect_diffs_missing_key_in_actual_is_skipped():
 
 def test_collect_diffs_extra_keys_in_actual_are_ignored():
     """Only the intersection is asserted; extras in actual pass."""
-    d, p = collect_diffs(
-        {"a": 1, "extra": "anything"}, {"a": 1}, prose_fields=set()
-    )
+    d, p = collect_diffs({"a": 1, "extra": "anything"}, {"a": 1}, prose_fields=set())
     assert d == []
     assert p == []
 
 
 def test_collect_diffs_intersection_value_mismatch_still_fails():
     """Keys present in both that differ in value still fail."""
-    d, _ = collect_diffs(
-        {"a": 2, "extra": "x"}, {"a": 1, "b": 2}, prose_fields=set()
-    )
+    d, _ = collect_diffs({"a": 2, "extra": "x"}, {"a": 1, "b": 2}, prose_fields=set())
     assert any("a" in m for m in d)
 
 
@@ -1155,9 +1149,7 @@ def test_collect_diffs_length_mismatch_is_decision():
 
 
 def test_collect_diffs_equal_prose_does_not_emit_pair():
-    d, p = collect_diffs(
-        {"reason": "same"}, {"reason": "same"}, prose_fields={"reason"}
-    )
+    d, p = collect_diffs({"reason": "same"}, {"reason": "same"}, prose_fields={"reason"})
     assert d == []
     assert p == []
 
@@ -1169,9 +1161,7 @@ def test_collect_diffs_equal_prose_does_not_emit_pair():
 
 def test_batch_grade_empty_pairs_makes_no_grader_call(tmp_path: Path):
     counter = tmp_path / "calls"
-    result = batch_grade_prose_fields(
-        [], _grader_count_cli(counter), timeout=5
-    )
+    result = batch_grade_prose_fields([], _grader_count_cli(counter), timeout=5)
     assert result == {}
     assert _count_grader_calls(counter) == 0
 
@@ -1179,9 +1169,7 @@ def test_batch_grade_empty_pairs_makes_no_grader_call(tmp_path: Path):
 def test_batch_grade_single_pair_one_call(tmp_path: Path):
     counter = tmp_path / "calls"
     pairs = [("$.reason", "expected", "actual")]
-    result = batch_grade_prose_fields(
-        pairs, _grader_count_cli(counter), timeout=5
-    )
+    result = batch_grade_prose_fields(pairs, _grader_count_cli(counter), timeout=5)
     assert _count_grader_calls(counter) == 1
     assert result["$.reason"] == (True, "")
 
@@ -1195,9 +1183,7 @@ def test_batch_grade_many_pairs_one_call(tmp_path: Path):
         ("$.c.d", "x", "y"),
         ("$.list[0].reason", "x", "y"),
     ]
-    result = batch_grade_prose_fields(
-        pairs, _grader_count_cli(counter), timeout=5
-    )
+    result = batch_grade_prose_fields(pairs, _grader_count_cli(counter), timeout=5)
     assert _count_grader_calls(counter) == 1
     for path, _, _ in pairs:
         assert result[path] == (True, "")
@@ -1356,7 +1342,9 @@ def test_cli_grader_mode_passes_on_wording_difference(tmp_path: Path, capsys: py
     assert "1 passed" in stdout
 
 
-def test_cli_grader_mode_fails_on_decision_field_difference(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+def test_cli_grader_mode_fails_on_decision_field_difference(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
     """Decision field (verdict) differs — must FAIL even if grader would say YES."""
     expected = {"verdict": "BUG", "reason": "same"}
     actual = {"verdict": "INVALID", "reason": "same"}
@@ -1457,7 +1445,9 @@ def test_exact_mode_falls_back_to_verbatim_comparison(tmp_path: Path, capsys: py
     assert "FAIL" in stdout
 
 
-def test_default_grader_not_invoked_when_decision_field_differs(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+def test_default_grader_not_invoked_when_decision_field_differs(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
     """If only decision fields differ, the grader is never called, so the
     default (claude -p --model haiku) does not need to exist on PATH."""
     expected = {"verdict": "BUG"}
