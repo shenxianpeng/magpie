@@ -31,11 +31,13 @@ Start with [`overview.md`](overview.md), then:
   [`drafting-mode.md`](drafting-mode.md),
   [`pairing-mode.md`](pairing-mode.md).
 - Cross-cutting: [`security-issue-lifecycle.md`](security-issue-lifecycle.md),
+  [`release-management-lifecycle.md`](release-management-lifecycle.md),
   [`privacy-llm-gate.md`](privacy-llm-gate.md),
   [`agent-isolation-sandbox.md`](agent-isolation-sandbox.md),
   [`cve-tooling.md`](cve-tooling.md),
   [`adoption-and-setup.md`](adoption-and-setup.md),
   [`adapters.md`](adapters.md),
+  [`project-agnosticism.md`](project-agnosticism.md),
   [`meta-and-quality-tooling.md`](meta-and-quality-tooling.md),
   [`security-reporting.md`](security-reporting.md).
 
