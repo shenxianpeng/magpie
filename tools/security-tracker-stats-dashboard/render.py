@@ -27,8 +27,9 @@ overlaid by a YAML file at `$TRACKER_STATS_CONFIG` (deep-merged; the
 `milestones` and `categories` lists are REPLACED entirely, not
 concatenated), then overlaid by these env-var quick overrides:
 
-    TRACKER_STATS_BUCKETS         monthly | quarterly
-    TRACKER_STATS_START           "YYYY-MM" (monthly) or "YYYY-Qn" (quarterly)
+    TRACKER_STATS_BUCKETS         monthly | quarterly | weekly
+    TRACKER_STATS_START           "YYYY-MM" (monthly), "YYYY-Qn" (quarterly)
+                                  or "YYYY-Www" (weekly, ISO week)
     TRACKER_STATS_UPSTREAM_REPO   upstream repo slug (or "" / "none" to skip PR charts)
     TRACKER_STATS_REPO            tracker repo slug (operational)
     TRACKER_STATS_OUT             output path
@@ -355,8 +356,9 @@ def load_config():
 CONFIG = load_config()
 
 BUCKETS_MODE = CONFIG.get('buckets', 'monthly')
-if BUCKETS_MODE not in ('monthly', 'quarterly'):
-    raise SystemExit(f"buckets must be 'monthly' or 'quarterly', got {BUCKETS_MODE!r}")
+if BUCKETS_MODE not in ('monthly', 'quarterly', 'weekly'):
+    raise SystemExit(
+        f"buckets must be 'monthly', 'quarterly' or 'weekly', got {BUCKETS_MODE!r}")
 
 START_OVERRIDE = CONFIG.get('start')
 UPSTREAM_REPO = CONFIG.get('upstream_repo')
@@ -495,11 +497,47 @@ def iter_quarters(y0, q0, y1, q1):
             y += 1
 
 
+# Weekly buckets key on ISO (year, week) — note the ISO year can differ from
+# the calendar year in late December / early January, but (iso_year, iso_week)
+# tuples remain chronologically ordered, so the existing <=-based iteration
+# and bucketing carry over unchanged.
+def week_of(d):
+    iso = d.isocalendar()
+    return iso[0], iso[1]
+
+
+def week_label(y, w):
+    return f"{y}-W{w:02d}"
+
+
+def week_end(y, w):
+    # ISO weeks run Monday (day 1) .. Sunday (day 7); end at Sunday 23:59:59.
+    sunday = dt.date.fromisocalendar(y, w, 7)
+    return dt.datetime(sunday.year, sunday.month, sunday.day,
+                       23, 59, 59, tzinfo=dt.timezone.utc)
+
+
+def iter_weeks(y0, w0, y1, w1):
+    # Step by 7 days from the Monday of the start week through the end week;
+    # ISO years have 52 or 53 weeks, so stepping by date avoids that edge.
+    cur = dt.date.fromisocalendar(y0, w0, 1)
+    last = dt.date.fromisocalendar(y1, w1, 1)
+    while cur <= last:
+        iso = cur.isocalendar()
+        yield iso[0], iso[1]
+        cur += dt.timedelta(days=7)
+
+
 if BUCKETS_MODE == 'monthly':
     bucket_of = month_of
     bucket_label = month_label
     bucket_end = month_end
     bucket_iter = iter_months
+elif BUCKETS_MODE == 'weekly':
+    bucket_of = week_of
+    bucket_label = week_label
+    bucket_end = week_end
+    bucket_iter = iter_weeks
 else:
     bucket_of = quarter_of
     bucket_label = quarter_label
@@ -516,6 +554,9 @@ if START_OVERRIDE:
     if BUCKETS_MODE == 'monthly':
         y0, m0 = (int(x) for x in START_OVERRIDE.split('-'))
         start_key = (y0, m0)
+    elif BUCKETS_MODE == 'weekly':
+        y_part, w_part = START_OVERRIDE.split('-W')
+        start_key = (int(y_part), int(w_part))
     else:
         y_part, q_part = START_OVERRIDE.split('-Q')
         start_key = (int(y_part), int(q_part))
@@ -562,6 +603,7 @@ REJECTION_BACKFILL_RE = re.compile(
 REJECTION_DATE_RE = re.compile(r'^\s*date:\s*(\d{4})-(\d{2})-(\d{2})\s*$', re.M)
 
 rejections_by_b = defaultdict(int)   # bucket label -> dated rejection count
+rejections_dated = []                # every dated rejection datetime (in + out of range)
 rejections_dated_total = 0
 rejections_backfill_total = 0
 
@@ -592,6 +634,7 @@ for li in ledger_issues:
                                 int(dm.group(3)), tzinfo=dt.timezone.utc)
             except ValueError:
                 continue
+            rejections_dated.append(d)
             cb = bucket_of(d)
             if cb < buckets[0] or cb > buckets[-1]:
                 # Dated outside the chart range — still count in the
@@ -833,6 +876,22 @@ for bi, b in enumerate(buckets):
     cum_opened[bi] = op
     cum_closed[bi] = cl
 
+# --- cumulative rejected + reported (opened + rejected) ------------
+# Mirror the cumulative-opened computation exactly: at each bucket end,
+# count every rejection dated on or before it (so rejections that predate
+# the chart window are baselined in, just as pre-window trackers are in
+# cum_opened). rejections_dated / rejections_backfill_total come from the
+# ledger parse above; both are empty/0 when the stat is disabled, so
+# cum_reported degrades to exactly cum_opened. Any legacy undated backfill
+# lump still seeds a flat baseline. "reported" = trackers opened + rejected.
+cum_rejected = []
+for b in buckets:
+    be = bucket_end(*b)
+    ts = NOW if be > NOW else be
+    cum_rejected.append(
+        rejections_backfill_total + sum(1 for rd in rejections_dated if rd <= ts))
+cum_reported = [o + r for o, r in zip(cum_opened, cum_rejected)]
+
 # --- Opened-in-bucket vs untriaged-at-bucket-end ------------------
 
 opened_in_b = [0] * n_buckets
@@ -847,6 +906,11 @@ for i in issues:
         continue
     bi = buckets.index(cb)
     opened_in_b[bi] += 1
+
+# Per-bucket reported = trackers opened in the bucket + reports rejected in
+# the same bucket (rejected_series). Equals opened_in_b when the rejections
+# stat is disabled, so the trace is only drawn when the stat is active.
+reported_in_b = [o + r for o, r in zip(opened_in_b, rejected_series)]
 
 # --- triage / response ---------------------------------------------
 
@@ -1078,11 +1142,15 @@ def milestone_x(milestone_date):
     mo = int(milestone_date[5:7])
     if BUCKETS_MODE == 'monthly':
         return f"{y}-{mo:02d}"
+    if BUCKETS_MODE == 'weekly':
+        d = dt.date(y, mo, int(milestone_date[8:10]))
+        iso = d.isocalendar()
+        return f"{iso[0]}-W{iso[1]:02d}"
     return f"{y}-Q{(mo - 1) // 3 + 1}"
 
 
 # Title prefix differs between bucket modes for clarity.
-bucket_word = 'month' if BUCKETS_MODE == 'monthly' else 'quarter'
+bucket_word = {'monthly': 'month', 'weekly': 'week'}.get(BUCKETS_MODE, 'quarter')
 
 # Build stacked-band traces in STACK_ORDER. With the default config that
 # resolves to `fixed_released, open_pr_merged, open_triaged,
@@ -1172,6 +1240,38 @@ else:
     rej_cards_html = ''
     rej_chart_js = ''
 
+# Extra cumulative traces (rejected + reported) appended to the c_cum
+# chart. Only emitted when the rejections stat is active; otherwise an
+# empty string leaves the cumulative chart with its original two lines
+# for projects without a ledger. Plain single-brace JS — inserted
+# verbatim into the HTML f-string via {cum_rej_traces}.
+if REJECTIONS_LEDGER_LABEL and (rejections_total or ledger_issues):
+    cum_rej_traces = (
+        ",\n  {x: buckets, y: " + js_array(cum_rejected) +
+        ", name: 'cumulative rejected (no tracker)', type: 'scatter', "
+        "mode: 'lines+markers', connectgaps: true, "
+        "line: {color: '#7f8c8d', dash: 'dot'}},\n"
+        "  {x: buckets, y: " + js_array(cum_reported) +
+        ", name: 'reported (opened + rejected)', type: 'scatter', "
+        "mode: 'lines+markers', connectgaps: true, "
+        "line: {color: '#9467bd', width: 3}}"
+    )
+else:
+    cum_rej_traces = ''
+
+# Extra "reported" trace (opened + rejected per bucket) appended to the
+# opened-vs-untriaged chart. Same activation rule as cum_rej_traces so it
+# is omitted (and the chart keeps its two original lines) when no ledger.
+if REJECTIONS_LEDGER_LABEL and (rejections_total or ledger_issues):
+    rep_ou_trace = (
+        ",\n  {x: buckets, y: " + js_array(reported_in_b) +
+        ", name: 'reported in " + bucket_word + " (opened + rejected)', "
+        "type: 'scatter', mode: 'lines+markers', connectgaps: true, "
+        "line: {color: '#9467bd', width: 3}}"
+    )
+else:
+    rep_ou_trace = ''
+
 
 HTML = f"""<!DOCTYPE html>
 <html lang="en">
@@ -1228,10 +1328,10 @@ Plotly.newPlot('c_open_vs_untriaged', [
     line: {{color: '#1f77b4'}}}},
   {{x: buckets, y: {js_array(untriaged_at_bend)},  name: 'untriaged at {bucket_word}-end',
     type: 'scatter', mode: 'lines+markers', connectgaps: true,
-    line: {{color: '#d62728'}}}}
+    line: {{color: '#d62728'}}}}{rep_ou_trace}
 ], {{
   ...MILESTONES_LAYOUT,
-  title: 'Opened vs. untriaged backlog (per {bucket_word})',
+  title: 'Reported vs. opened vs. untriaged backlog (per {bucket_word})',
   yaxis: {{title: 'count'}},
   legend: {{orientation: 'h'}}
 }});
@@ -1242,10 +1342,10 @@ Plotly.newPlot('c_cum', [
     line: {{color: '#1f77b4'}}, fill: 'tozeroy'}},
   {{x: buckets, y: {js_array(cum_closed)}, name: 'cumulative closed',
     type: 'scatter', mode: 'lines+markers', connectgaps: true,
-    line: {{color: '#2ca02c'}}, fill: 'tozeroy'}}
+    line: {{color: '#2ca02c'}}, fill: 'tozeroy'}}{cum_rej_traces}
 ], {{
   ...MILESTONES_LAYOUT,
-  title: 'Cumulative opened vs. closed (gap = open backlog)',
+  title: 'Cumulative reported (opened + rejected) vs. opened vs. closed (gap = open backlog)',
   yaxis: {{title: 'count'}},
   legend: {{orientation: 'h'}}
 }});
