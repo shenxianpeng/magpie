@@ -23,7 +23,9 @@ has_linked_pr
   true if any of: (a) the closedByPullRequestsReferences field is
   non-empty, (b) a cross-repo `gh search prs` hit was provided, or
   (c) the issue body's "PR with the fix" field contains a URL.
-  false otherwise.
+  false otherwise. Note: (b) and (c) each make this true on their own —
+  an empty closedByPullRequestsReferences array does NOT make it false
+  when a cross-repo PR hit or a body "PR with the fix" URL is present.
 
 pr_merged
   true if the linked PR's state is MERGED. false if OPEN or CLOSED
@@ -36,6 +38,12 @@ reporter_thread_activity
     "third_party"  — external party (e.g. ASF Security) commented
     "none"         — no new thread activity since last team message
     null           — no Gmail thread (markdown-imported tracker)
+  Precedence: if the reporter is disputing or challenging a prior team
+  assessment anywhere in the thread (e.g. "I disagree with the ...
+  assessment"), classify as "pushback" even when the same thread also
+  introduces new technical detail — the challenge to the team's decision
+  is the salient triage signal. Use "new_detail" only when the reporter
+  adds new technical information without contesting a prior team call.
 
 canned_response_match
   Based on the mock canned-response scan output. One of:
