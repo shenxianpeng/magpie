@@ -17,7 +17,7 @@
 
 """Validate framework skill definitions.
 
-This module validates twelve aspects of every skill under
+This module validates seventeen aspects of every skill under
 skills/:
 
 1. YAML frontmatter — every SKILL.md must have a valid frontmatter
@@ -103,6 +103,14 @@ skills/:
     headings (``project.md`` and ``README.md`` are excluded from the
     h2 comparison because their structures intentionally differ by
     organization profile). Advisory only.
+17. Branch-name confidentiality (SOFT) — scans ``git checkout -b`` and
+    ``git switch -c`` examples in fenced code blocks across skills and
+    docs and flags any concrete branch name that contains an
+    embargo-breaking term: a CVE ID (``CVE-YYYY-NNNNN``), ``security``,
+    ``vulnerability`` / ``vuln``, or ``advisory``.  Pre-disclosure
+    public branch names must not reveal embargo context.  Lines in
+    explicit "bad example" contexts (containing ``**bad**`` or
+    ``bad:``) are exempt.  Advisory only.
 
 SOFT categories surface as advisory warnings (stderr) without
 failing the run unless ``--strict`` is passed.
@@ -118,6 +126,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import re
+import subprocess
 import sys
 from collections.abc import Iterable
 from pathlib import Path
@@ -442,6 +451,9 @@ OVERRIDE_CONTRACT_CATEGORY = "override-contract"
 # SOFT advisory: structural drift between projects/_template/ and
 # projects/non-asf-example/ — missing files, undocumented files, or h2 mismatches.
 TEMPLATE_DRIFT_CATEGORY = "template-drift"
+# SOFT advisory: branch name examples in code blocks that contain embargo-breaking
+# terms (CVE IDs, security, vulnerability, advisory) before public disclosure.
+BRANCH_CONFIDENTIALITY_CATEGORY = "branch-name-confidentiality"
 
 # The `magpie-` namespace prefix every installed framework skill carries.
 SKILL_NAME_PREFIX = "magpie-"
@@ -461,6 +473,7 @@ SOFT_CATEGORIES: frozenset[str] = frozenset(
         MULTI_CAPABILITY_CATEGORY,
         OVERRIDE_CONTRACT_CATEGORY,
         TEMPLATE_DRIFT_CATEGORY,
+        BRANCH_CONFIDENTIALITY_CATEGORY,
     }
 )
 HARD_CATEGORIES: frozenset[str] = frozenset(
@@ -1531,10 +1544,46 @@ def collect_files_to_check(root: Path | None = None) -> list[Path]:
 
 def collect_tool_dirs(root: Path | None = None) -> list[Path]:
     """Return every immediate sub-directory under tools/ that should be checked."""
-    base = (root or find_repo_root()) / TOOLS_DIR
+    repo_root = root or find_repo_root()
+    base = repo_root / TOOLS_DIR
     if not base.exists():
         return []
-    return sorted(d for d in base.iterdir() if d.is_dir() and not d.name.startswith("."))
+
+    dirs = sorted(d for d in base.iterdir() if d.is_dir() and not d.name.startswith("."))
+    tracked_names = _git_tracked_tool_names(repo_root)
+    if tracked_names is None:
+        return dirs
+    return [d for d in dirs if d.name in tracked_names]
+
+
+def _git_tracked_tool_names(root: Path) -> set[str] | None:
+    """Return top-level ``tools/<name>`` entries tracked by git, if available."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z", "--", str(TOOLS_DIR)],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=False,
+        )
+    except OSError:
+        return None
+    if result.returncode != 0:
+        return None
+
+    names: set[str] = set()
+    prefix = f"{TOOLS_DIR.as_posix()}/"
+    for raw_path in result.stdout.split(b"\0"):
+        if not raw_path:
+            continue
+        path = raw_path.decode("utf-8", errors="surrogateescape")
+        if not path.startswith(prefix):
+            continue
+        remainder = path[len(prefix) :]
+        name = remainder.split("/", 1)[0]
+        if name and not name.startswith("."):
+            names.add(name)
+    return names
 
 
 def validate_tools(root: Path | None = None) -> Iterable[Violation]:
@@ -2814,6 +2863,95 @@ def validate_project_template_drift(root: Path | None = None) -> Iterable[Violat
             )
 
 
+# ---------------------------------------------------------------------------
+# Branch-name confidentiality check (check #17, SOFT)
+# ---------------------------------------------------------------------------
+
+# Matches `git checkout -b <branch-name>` in fenced code blocks.
+_BRANCH_CHECKOUT_RE = re.compile(r"git\s+checkout\s+-b\s+([^\s#\\]+)")
+# Matches `git switch -c <branch-name>` and `git switch --create <branch-name>`.
+_BRANCH_SWITCH_RE = re.compile(r"git\s+switch\s+(?:--create|-c)\s+([^\s#\\]+)")
+
+# Embargo-breaking terms in branch names:
+#   - CVE IDs: CVE-YYYY-NNNNN
+#   - security, vulnerability (or vuln), advisory as a word component
+_EMBARGO_BRANCH_RE = re.compile(
+    r"CVE-\d{4}-\d{4,}"
+    r"|(?<![^-_/])(?:security|vuln(?:erability|erable)?|advisory)(?![^-_/])",
+    re.IGNORECASE,
+)
+
+# Markers that indicate a line is an intentional "bad example" demonstration.
+_BRANCH_BAD_EXAMPLE_MARKERS: tuple[str, ...] = (
+    "**bad**",
+    "bad:",
+    "# bad",
+    "don't:",
+    "not:",
+    "invalid:",
+    "forbidden:",
+)
+
+
+def validate_branch_name_confidentiality(path: Path, text: str) -> Iterable[Violation]:
+    """Flag embargo-breaking terms in branch name examples inside fenced code blocks.
+
+    SOFT advisory — scans ``git checkout -b`` and ``git switch -c`` commands in
+    fenced code blocks across skills and docs and flags any concrete branch name
+    that contains a CVE ID, ``security``, ``vulnerability`` / ``vuln``, or
+    ``advisory``.  Pre-disclosure public branch names must not reveal embargo
+    context; use a neutral descriptive slug instead.
+
+    Lines in explicit "bad example" contexts (containing ``**bad**`` or ``bad:``)
+    are exempt.  Placeholder branch names (containing ``<...>`` or starting with
+    ``$``) are silently skipped.
+    """
+    if is_path_allowlisted(path):
+        return
+
+    for block_match in _FENCED_CODE_RE.finditer(text):
+        block_body = block_match.group()
+        block_start_line = text[: block_match.start()].count("\n")
+        block_lines = block_body.splitlines()
+
+        for cmd_re in (_BRANCH_CHECKOUT_RE, _BRANCH_SWITCH_RE):
+            for cmd_match in cmd_re.finditer(block_body):
+                branch_name = cmd_match.group(1)
+
+                # Skip placeholder branch names.
+                if "<" in branch_name or branch_name.startswith("$"):
+                    continue
+
+                embargo_match = _EMBARGO_BRANCH_RE.search(branch_name)
+                if not embargo_match:
+                    continue
+
+                # Determine which line within the block carries this match.
+                line_in_block = block_body[: cmd_match.start()].count("\n")
+                if 0 <= line_in_block < len(block_lines):
+                    line_text = block_lines[line_in_block]
+                    if any(marker in line_text for marker in _BRANCH_BAD_EXAMPLE_MARKERS):
+                        continue
+                    # Also skip if the line itself is a comment (# bad example…).
+                    stripped = line_text.strip()
+                    if stripped.startswith("#") and any(
+                        m in stripped.lower() for m in ("bad", "don't", "invalid")
+                    ):
+                        continue
+
+                absolute_line_no = block_start_line + line_in_block + 1
+                yield Violation(
+                    path,
+                    absolute_line_no,
+                    f"branch-name-confidentiality: branch name example `{branch_name}` "
+                    f"contains embargo-breaking term {embargo_match.group()!r} — "
+                    f"pre-disclosure public branch names must not reveal CVE IDs or "
+                    f"security framing; use a neutral descriptive slug instead "
+                    f"(e.g. 'fix-input-validation')",
+                    category=BRANCH_CONFIDENTIALITY_CATEGORY,
+                )
+
+
 def run_validation(root: Path | None = None) -> list[Violation]:
     """Run the full validation suite and return all violations."""
     repo_root = root or find_repo_root()
@@ -2845,6 +2983,7 @@ def run_validation(root: Path | None = None) -> list[Violation]:
         violations.extend(validate_security_patterns(path, text))
         violations.extend(validate_gh_list_limit(path, text))
         violations.extend(validate_lowercase_f_field(path, text))
+        violations.extend(validate_branch_name_confidentiality(path, text))
 
     # License-header check for tool Python source files.
     for py_path in collect_tool_python_files(repo_root):
@@ -2876,6 +3015,14 @@ def run_validation(root: Path | None = None) -> list[Violation]:
 
     # Project-template drift check: _template/ and non-asf-example/ stay comparable.
     violations.extend(validate_project_template_drift(repo_root))
+
+    # Branch-name confidentiality check on docs/ (skills/ is already covered above).
+    for doc_path in sorted(doc_files):
+        try:
+            doc_text = doc_path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        violations.extend(validate_branch_name_confidentiality(doc_path, doc_text))
 
     return violations
 
