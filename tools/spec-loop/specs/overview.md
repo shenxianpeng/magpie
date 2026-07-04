@@ -57,6 +57,7 @@ Each mode is an independently toggleable set of skills. Maturity mirrors
 | Spec-loop runner (plan/build/update/consolidate + headless harnesses) | [spec-loop-runner.md](spec-loop-runner.md) |
 | Reviewer routing (experimental, Agentic Triage) | [reviewer-routing.md](reviewer-routing.md) |
 | Cross-project skill reconciler (experimental, infra) | [skill-reconciler.md](skill-reconciler.md) |
+| Maintainer-education stream (proposed — release-blocking per PRINCIPLE 18) | [maintainer-education.md](maintainer-education.md) |
 
 ## The non-negotiables every area inherits
 
