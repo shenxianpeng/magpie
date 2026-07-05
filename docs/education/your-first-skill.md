@@ -92,9 +92,9 @@ test a function. Instead, you write example cases that cover the range of real
 inputs, and you check that the agent's output meets the criteria you care
 about. When you find a new way it can fail, you add an example for it.
 
-The pattern catalogue (`pattern-catalogue.md`, planned) has ready-to-copy
-examples. The `eval-driven-development.md` page (planned) goes deeper on how to
-judge output that can vary.
+The [pattern catalogue](pattern-catalogue.md) has ready-to-copy
+examples. The [eval-driven-development](eval-driven-development.md) page goes
+deeper on how to judge output that can vary.
 
 ---
 
@@ -295,7 +295,7 @@ PYTHONPATH=tools/skill-evals/src python3 -m skill_evals.runner --cli "<agent-com
     tools/skill-evals/evals/<name>/
 ```
 
-See the eval-driven-development page (`eval-driven-development.md`, planned) for
+See the [eval-driven-development](eval-driven-development.md) page for
 a fuller worked example.
 
 ---
@@ -374,13 +374,24 @@ skill you cannot.
 
 ## Where to go next
 
+This is **step 4** in the [learning progression](README.md). The natural next
+step is to make its behaviour testable:
+
+- **[Eval-driven development](eval-driven-development.md)** — step 5: how to judge
+  output that can vary, with worked examples from real Magpie skills. Your skill
+  is not finished until it has an eval suite, so this is the immediate next read.
+- **[Agentic and autonomous work](agentic-work.md)** — step 6: once a skill is
+  written and tested, this is how you let it run without watching every step.
+
+Supporting references for skill-writing:
+
 - **[magpie-write-skill](../../skills/write-skill/SKILL.md)** —
   the full authoring reference, with the security checklist and packaging
   details. Run it with `/write-skill` once you are ready for the complete
   walk-through.
-- **`pattern-catalogue.md`** (planned) — ready-to-copy skill, prompt, and
-  tool-use patterns.
-- **`eval-driven-development.md`** (planned) — how to judge output that can
-  vary, with worked examples from real Magpie skills.
+- **[Pattern catalogue](pattern-catalogue.md)** — ready-to-copy skill, prompt,
+  and tool-use patterns.
+- **[Tutorials](tutorials.md)** — a hands-on lab that puts steps 4 and 5 into
+  practice end to end.
 - **[CONTRIBUTING.md](../../CONTRIBUTING.md)** — the framework's contribution
   process, PR conventions, and review expectations.
