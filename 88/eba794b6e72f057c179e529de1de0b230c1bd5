@@ -1,0 +1,19 @@
+docs/education/pattern-catalogue.md
+  s_48510ac36f4c8c::t_46796ae5bd18b2 215-216,218-220
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "88eba794b6e72f057c179e529de1de0b230c1bd5",
+  "prompts": {},
+  "sessions": {
+    "s_48510ac36f4c8c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fa71e-6aa6-7f46-90e2-d2fe24592d47",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "shenxianpeng <xianpeng.shen@gmail.com>"
+    }
+  }
+}
