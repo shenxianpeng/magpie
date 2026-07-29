@@ -1,0 +1,20 @@
+docs/rfcs/RFC-AI-0004.md
+  s_4c574be61ff1a9::t_9314a06441cad2 74
+  s_4c574be61ff1a9::t_90dd31d2778e36 96,99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "6c7ca1ae732da5d8951a2b75639fbc355a445a55",
+  "prompts": {},
+  "sessions": {
+    "s_4c574be61ff1a9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019faec9-994b-7c70-8166-be52ab2128db",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "shenxianpeng <xianpeng.shen@gmail.com>"
+    }
+  }
+}
