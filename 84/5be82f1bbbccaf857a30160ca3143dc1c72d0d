@@ -1,0 +1,30 @@
+tools/spec-loop/specs/issue-management-family.md
+  s_48510ac36f4c8c::t_e65b53a9f1416d 209
+  s_4c574be61ff1a9::t_60f24f981c567d 210-212
+tools/spec-loop/specs/reviewer-routing.md
+  s_4c574be61ff1a9::t_91b6beaaf9c274 128-130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "845be82f1bbbccaf857a30160ca3143dc1c72d0d",
+  "prompts": {},
+  "sessions": {
+    "s_48510ac36f4c8c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fa71e-6aa6-7f46-90e2-d2fe24592d47",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "shenxianpeng <xianpeng.shen@gmail.com>"
+    },
+    "s_4c574be61ff1a9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019faec9-994b-7c70-8166-be52ab2128db",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "shenxianpeng <xianpeng.shen@gmail.com>"
+    }
+  }
+}
