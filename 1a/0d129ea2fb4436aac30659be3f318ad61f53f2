@@ -1,0 +1,21 @@
+tools/spec-loop/specs/issue-management-family.md
+  s_4c574be61ff1a9::t_60f24f981c567d 210-212
+tools/spec-loop/specs/reviewer-routing.md
+  s_4c574be61ff1a9::t_91b6beaaf9c274 128-130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "1a0d129ea2fb4436aac30659be3f318ad61f53f2",
+  "prompts": {},
+  "sessions": {
+    "s_4c574be61ff1a9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019faec9-994b-7c70-8166-be52ab2128db",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "shenxianpeng <xianpeng.shen@gmail.com>"
+    }
+  }
+}
