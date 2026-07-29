@@ -1,0 +1,28 @@
+tools/spec-loop/specs/adapters.md
+  s_48510ac36f4c8c::t_4eccba4e4d8f11 168-171
+  s_4c574be61ff1a9::t_bce841a04a6b2f 172-175
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "8f9908136c1646b64f02a77cf81b812da2c46853",
+  "prompts": {},
+  "sessions": {
+    "s_48510ac36f4c8c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fa71e-6aa6-7f46-90e2-d2fe24592d47",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "shenxianpeng <xianpeng.shen@gmail.com>"
+    },
+    "s_4c574be61ff1a9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019faec9-994b-7c70-8166-be52ab2128db",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "shenxianpeng <xianpeng.shen@gmail.com>"
+    }
+  }
+}
