@@ -1,0 +1,19 @@
+docs/rfcs/RFC-AI-0004.md
+  s_13c185d21a0631::t_41376686b3e890 99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "bd07ab942419b1918568962e9eab0a76cb8d36dd",
+  "prompts": {},
+  "sessions": {
+    "s_13c185d21a0631": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fb3c9-7437-75e1-a6e1-9367193c2b61",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "shenxianpeng <xianpeng.shen@gmail.com>"
+    }
+  }
+}
